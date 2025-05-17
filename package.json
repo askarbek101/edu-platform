@@ -1,0 +1,37 @@
+{
+  "name": "nextjs-clerk-starter",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.0.0",
+    "@clerk/nextjs": "6.12.8",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "antd": "^5.25.1",
+    "autoprefixer": "^10.4.20",
+    "clsx": "^2.1.1",
+    "dotenv": "^16.5.0",
+    "framer-motion": "^12.11.4",
+    "next": "15.2.3",
+    "next-auth": "^4.24.11",
+    "pg": "^8.16.0",
+    "postcss": "^8.5.1",
+    "prism-react-renderer": "^2.4.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.2"
+  }
+}
