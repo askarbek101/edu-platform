@@ -148,10 +148,10 @@ export const userProgressDb = {
 export const lessonsDb = {
   // Create a new lesson
   async create(assignmentId: number, title: string, content?: string, image?: string, video?: string, 
-               answerA?: string, answerB?: string, answerC?: string, answerD?: string, rightAnswer?: string) {
+               answerType?: 'single' | 'multiple' | 'matching', answers?: string, rightAnswer?: string) {
     const result = await pool.query(
-      'INSERT INTO lessons (assignment_id, title, content, image, video, answer_a, answer_b, answer_c, answer_d, right_answer) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-      [assignmentId, title, content, image, video, answerA, answerB, answerC, answerD, rightAnswer]
+      'INSERT INTO lessons (assignment_id, title, content, image, video, answer_type, answers, right_answer) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [assignmentId, title, content, image, video, answerType, answers, rightAnswer]
     );
     return result.rows[0];
   },
@@ -180,26 +180,22 @@ export const lessonsDb = {
     content?: string; 
     image?: string; 
     video?: string; 
-    answerA?: string;
-    answerB?: string;
-    answerC?: string;
-    answerD?: string;
-    rightAnswer?: string 
+    answerType?: 'single' | 'multiple' | 'matching';
+    answers?: string;
+    rightAnswer?: string;
   }) {
-    const { title, content, image, video, answerA, answerB, answerC, answerD, rightAnswer } = data;
+    const { title, content, image, video, answerType, answers, rightAnswer } = data;
     const result = await pool.query(
       `UPDATE lessons SET 
         title = COALESCE($1, title), 
         content = COALESCE($2, content), 
         image = COALESCE($3, image),
         video = COALESCE($4, video),
-        answer_a = COALESCE($5, answer_a),
-        answer_b = COALESCE($6, answer_b),
-        answer_c = COALESCE($7, answer_c),
-        answer_d = COALESCE($8, answer_d),
-        right_answer = COALESCE($9, right_answer)
-      WHERE id = $10 RETURNING *`,
-      [title, content, image, video, answerA, answerB, answerC, answerD, rightAnswer, id]
+        answer_type = COALESCE($5, answer_type),
+        answers = COALESCE($6, answers),
+        right_answer = COALESCE($7, right_answer)
+      WHERE id = $8 RETURNING *`,
+      [title, content, image, video, answerType, answers, rightAnswer, id]
     );
     return result.rows[0] || null;
   },

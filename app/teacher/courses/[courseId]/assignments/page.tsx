@@ -23,11 +23,25 @@ interface Lesson {
   content?: string;
   image?: string;
   video?: string;
+  answer_type?: "single" | "multiple" | "matching";
   right_answer?: string;
+  answers?: string;
+}
+
+interface ExtendedLesson extends Lesson {
   answer_a?: string;
   answer_b?: string;
   answer_c?: string;
   answer_d?: string;
+  question_1?: string;
+  question_2?: string;
+  question_3?: string;
+  question_4?: string;
+  match_1?: string;
+  match_2?: string;
+  match_3?: string;
+  match_4?: string;
+  selected_answers?: Record<string, boolean>;
 }
 
 interface Course {
@@ -62,15 +76,13 @@ export default function TeacherAssignmentsPage() {
     points: 10
   });
   
-  const [newLesson, setNewLesson] = useState<Partial<Lesson>>({
+  const [newLesson, setNewLesson] = useState<Partial<ExtendedLesson>>({
     title: "",
     content: "",
     image: "",
     video: "",
-    answer_a: "",
-    answer_b: "",
-    answer_c: "",
-    answer_d: "",
+    answer_type: "single",
+    answers: "{}",
     right_answer: ""
   });
   
@@ -157,31 +169,12 @@ export default function TeacherAssignmentsPage() {
     
     if (lesson) {
       // Edit existing lesson
-      setNewLesson({
-        title: lesson.title,
-        content: lesson.content,
-        image: lesson.image,
-        video: lesson.video,
-        answer_a: lesson.answer_a,
-        answer_b: lesson.answer_b,
-        answer_c: lesson.answer_c,
-        answer_d: lesson.answer_d,
-        right_answer: lesson.right_answer
-      });
+      const parsedLesson = parseLessonData(lesson) as ExtendedLesson;
+      setNewLesson(parsedLesson);
       setIsEditing(true);
     } else {
       // Create new lesson
-      setNewLesson({
-        title: "",
-        content: "",
-        image: "",
-        video: "",
-        answer_a: "",
-        answer_b: "",
-        answer_c: "",
-        answer_d: "",
-        right_answer: ""
-      });
+      resetLessonForm();
       setIsEditing(false);
     }
     
@@ -259,6 +252,62 @@ export default function TeacherAssignmentsPage() {
     if (!selectedAssignment) return;
     
     try {
+      // Prepare the answers and right_answer based on answer_type
+      let formattedAnswers = {};
+      let formattedRightAnswer = "";
+      
+      if (newLesson.answer_type === "single") {
+        // Format single choice answers
+        formattedAnswers = {
+          A: newLesson.answer_a || "",
+          B: newLesson.answer_b || "",
+          C: newLesson.answer_c || "",
+          D: newLesson.answer_d || "",
+        };
+        formattedRightAnswer = newLesson.right_answer || "";
+      } else if (newLesson.answer_type === "multiple") {
+        // Format multiple choice answers
+        formattedAnswers = {
+          A: newLesson.answer_a || "",
+          B: newLesson.answer_b || "",
+          C: newLesson.answer_c || "",
+          D: newLesson.answer_d || "",
+        };
+        // Convert array of selected answers to JSON string
+        formattedRightAnswer = JSON.stringify(
+          Object.entries(newLesson.selected_answers || {})
+            .filter(([_, isSelected]) => isSelected)
+            .map(([key]) => key)
+        );
+      } else if (newLesson.answer_type === "matching") {
+        // Format matching answers
+        formattedAnswers = {
+          // Questions (numbered)
+          "1": newLesson.question_1 || "",
+          "2": newLesson.question_2 || "",
+          "3": newLesson.question_3 || "",
+          "4": newLesson.question_4 || "",
+          // Answers (lettered)
+          "A": newLesson.answer_a || "",
+          "B": newLesson.answer_b || "",
+          "C": newLesson.answer_c || "",
+          "D": newLesson.answer_d || "",
+        };
+        // Create mapping of questions to answers
+        formattedRightAnswer = JSON.stringify({
+          "1": newLesson.match_1 || "",
+          "2": newLesson.match_2 || "",
+          "3": newLesson.match_3 || "",
+          "4": newLesson.match_4 || "",
+        });
+      }
+      
+      const lessonData = {
+        ...newLesson,
+        answers: JSON.stringify(formattedAnswers),
+        right_answer: formattedRightAnswer,
+      };
+      
       if (isEditing && newLesson.id) {
         // Update existing lesson
         const response = await fetch(`/api/courses/${courseId}/assignments/${selectedAssignment.id}/lessons?id=${newLesson.id}`, {
@@ -266,7 +315,7 @@ export default function TeacherAssignmentsPage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(newLesson),
+          body: JSON.stringify(lessonData),
         });
         
         if (!response.ok) {
@@ -286,7 +335,7 @@ export default function TeacherAssignmentsPage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(newLesson),
+          body: JSON.stringify(lessonData),
         });
         
         if (!response.ok) {
@@ -301,21 +350,90 @@ export default function TeacherAssignmentsPage() {
       
       // Close modal and reset form
       setIsLessonModalOpen(false);
-      setNewLesson({
-        title: "",
-        content: "",
-        image: "",
-        video: "",
-        answer_a: "",
-        answer_b: "",
-        answer_c: "",
-        answer_d: "",
-        right_answer: ""
-      });
-      setIsEditing(false);
+      resetLessonForm();
     } catch (err) {
       console.error('Error saving lesson:', err);
       setError('Failed to save lesson. Please try again.');
+    }
+  };
+
+  // Reset lesson form
+  const resetLessonForm = () => {
+    setNewLesson({
+      title: "",
+      content: "",
+      image: "",
+      video: "",
+      answer_type: "single",
+      answers: "{}",
+      right_answer: "",
+      answer_a: "",
+      answer_b: "",
+      answer_c: "",
+      answer_d: "",
+      question_1: "",
+      question_2: "",
+      question_3: "",
+      question_4: "",
+      match_1: "",
+      match_2: "",
+      match_3: "",
+      match_4: "",
+      selected_answers: {}
+    });
+    setIsEditing(false);
+  };
+
+  // Parse lesson data when editing
+  const parseLessonData = (lesson: Lesson) => {
+    try {
+      const parsedLesson = { ...lesson } as ExtendedLesson;
+      
+      // Parse answers JSON string
+      if (lesson.answers) {
+        const answersObj = JSON.parse(lesson.answers);
+        
+        if (lesson.answer_type === "single" || lesson.answer_type === "multiple") {
+          parsedLesson.answer_a = answersObj.A || "";
+          parsedLesson.answer_b = answersObj.B || "";
+          parsedLesson.answer_c = answersObj.C || "";
+          parsedLesson.answer_d = answersObj.D || "";
+          
+          // For multiple choice, set selected answers
+          if (lesson.answer_type === "multiple" && lesson.right_answer) {
+            const selectedAnswers = JSON.parse(lesson.right_answer);
+            parsedLesson.selected_answers = {
+              A: selectedAnswers.includes("A"),
+              B: selectedAnswers.includes("B"),
+              C: selectedAnswers.includes("C"),
+              D: selectedAnswers.includes("D")
+            };
+          }
+        } else if (lesson.answer_type === "matching") {
+          parsedLesson.question_1 = answersObj["1"] || "";
+          parsedLesson.question_2 = answersObj["2"] || "";
+          parsedLesson.question_3 = answersObj["3"] || "";
+          parsedLesson.question_4 = answersObj["4"] || "";
+          parsedLesson.answer_a = answersObj.A || "";
+          parsedLesson.answer_b = answersObj.B || "";
+          parsedLesson.answer_c = answersObj.C || "";
+          parsedLesson.answer_d = answersObj.D || "";
+          
+          // Parse matching answers
+          if (lesson.right_answer) {
+            const matchingAnswers = JSON.parse(lesson.right_answer);
+            parsedLesson.match_1 = matchingAnswers["1"] || "";
+            parsedLesson.match_2 = matchingAnswers["2"] || "";
+            parsedLesson.match_3 = matchingAnswers["3"] || "";
+            parsedLesson.match_4 = matchingAnswers["4"] || "";
+          }
+        }
+      }
+      
+      return parsedLesson;
+    } catch (error) {
+      console.error("Error parsing lesson data:", error);
+      return lesson as ExtendedLesson;
     }
   };
 
@@ -730,7 +848,7 @@ export default function TeacherAssignmentsPage() {
                   <input
                     type="text"
                     id="lesson-title"
-                    value={newLesson.title}
+                    value={newLesson.title || ""}
                     onChange={(e) => setNewLesson({...newLesson, title: e.target.value})}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
                     required
@@ -743,7 +861,7 @@ export default function TeacherAssignmentsPage() {
                   </label>
                   <textarea
                     id="lesson-content"
-                    value={newLesson.content}
+                    value={newLesson.content || ""}
                     onChange={(e) => setNewLesson({...newLesson, content: e.target.value})}
                     rows={4}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
@@ -757,7 +875,7 @@ export default function TeacherAssignmentsPage() {
                   <input
                     type="text"
                     id="lesson-image"
-                    value={newLesson.image}
+                    value={newLesson.image || ""}
                     onChange={(e) => setNewLesson({...newLesson, image: e.target.value})}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
                   />
@@ -770,104 +888,408 @@ export default function TeacherAssignmentsPage() {
                   <input
                     type="text"
                     id="lesson-video"
-                    value={newLesson.video}
+                    value={newLesson.video || ""}
                     onChange={(e) => setNewLesson({...newLesson, video: e.target.value})}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
                   />
                 </div>
                 
-                {selectedAssignment.type === "test" && (
-                  <div className="space-y-4 border-t pt-4">
-                    <h3 className="font-medium text-gray-900">Варианты ответов</h3>
-                    
-                    <div>
-                      <label htmlFor="answer-a" className="block text-sm font-medium text-gray-700 mb-1">
-                        Вариант A
-                      </label>
-                      <input
-                        type="text"
-                        id="answer-a"
-                        value={newLesson.answer_a}
-                        onChange={(e) => setNewLesson({...newLesson, answer_a: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="answer-b" className="block text-sm font-medium text-gray-700 mb-1">
-                        Вариант B
-                      </label>
-                      <input
-                        type="text"
-                        id="answer-b"
-                        value={newLesson.answer_b}
-                        onChange={(e) => setNewLesson({...newLesson, answer_b: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="answer-c" className="block text-sm font-medium text-gray-700 mb-1">
-                        Вариант C
-                      </label>
-                      <input
-                        type="text"
-                        id="answer-c"
-                        value={newLesson.answer_c}
-                        onChange={(e) => setNewLesson({...newLesson, answer_c: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="answer-d" className="block text-sm font-medium text-gray-700 mb-1">
-                        Вариант D
-                      </label>
-                      <input
-                        type="text"
-                        id="answer-d"
-                        value={newLesson.answer_d}
-                        onChange={(e) => setNewLesson({...newLesson, answer_d: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="right-answer" className="block text-sm font-medium text-gray-700 mb-1">
-                        Правильный ответ *
-                      </label>
-                      <select
-                        id="right-answer"
-                        value={newLesson.right_answer}
-                        onChange={(e) => setNewLesson({...newLesson, right_answer: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
-                        required={selectedAssignment.type === "test"}
-                      >
-                        <option value="">Выберите правильный ответ</option>
-                        <option value="A">Вариант A</option>
-                        <option value="B">Вариант B</option>
-                        <option value="C">Вариант C</option>
-                        <option value="D">Вариант D</option>
-                      </select>
-                    </div>
+                <div className="border-t pt-4">
+                  <div className="mb-4">
+                    <label htmlFor="answer-type" className="block text-sm font-medium text-gray-700 mb-1">
+                      Тип вопроса *
+                    </label>
+                    <select
+                      id="answer-type"
+                      value={newLesson.answer_type || "single"}
+                      onChange={(e) => setNewLesson({...newLesson, answer_type: e.target.value as "single" | "multiple" | "matching"})}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
+                      required
+                    >
+                      <option value="single">Один правильный ответ</option>
+                      <option value="multiple">Несколько правильных ответов</option>
+                      <option value="matching">Сопоставление</option>
+                    </select>
                   </div>
-                )}
-                
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setIsLessonModalOpen(false)}
-                    className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    Отмена
-                  </button>
-                  <button
-                    type="submit"
-                    className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    Сохранить
-                  </button>
+                  
+                  {/* Single choice answers */}
+                  {newLesson.answer_type === "single" && (
+                    <div className="space-y-4">
+                      <h3 className="font-medium text-gray-900">Варианты ответов</h3>
+                      
+                      <div>
+                        <label htmlFor="answer-a" className="block text-sm font-medium text-gray-700 mb-1">
+                          Вариант A
+                        </label>
+                        <input
+                          type="text"
+                          id="answer-a"
+                          value={newLesson.answer_a || ""}
+                          onChange={(e) => setNewLesson({...newLesson, answer_a: e.target.value})}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="answer-b" className="block text-sm font-medium text-gray-700 mb-1">
+                          Вариант B
+                        </label>
+                        <input
+                          type="text"
+                          id="answer-b"
+                          value={newLesson.answer_b || ""}
+                          onChange={(e) => setNewLesson({...newLesson, answer_b: e.target.value})}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="answer-c" className="block text-sm font-medium text-gray-700 mb-1">
+                          Вариант C
+                        </label>
+                        <input
+                          type="text"
+                          id="answer-c"
+                          value={newLesson.answer_c || ""}
+                          onChange={(e) => setNewLesson({...newLesson, answer_c: e.target.value})}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="answer-d" className="block text-sm font-medium text-gray-700 mb-1">
+                          Вариант D
+                        </label>
+                        <input
+                          type="text"
+                          id="answer-d"
+                          value={newLesson.answer_d || ""}
+                          onChange={(e) => setNewLesson({...newLesson, answer_d: e.target.value})}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="right-answer" className="block text-sm font-medium text-gray-700 mb-1">
+                          Правильный ответ *
+                        </label>
+                        <select
+                          id="right-answer"
+                          value={newLesson.right_answer || ""}
+                          onChange={(e) => setNewLesson({...newLesson, right_answer: e.target.value})}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-md focus:border-indigo-500 focus:ring-indigo-500 focus:shadow-lg sm:text-sm"
+                          required
+                        >
+                          <option value="">Выберите правильный ответ</option>
+                          <option value="A">Вариант A</option>
+                          <option value="B">Вариант B</option>
+                          <option value="C">Вариант C</option>
+                          <option value="D">Вариант D</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Multiple choice answers */}
+                  {newLesson.answer_type === "multiple" && (
+                    <div className="space-y-4">
+                      <h3 className="font-medium text-gray-900">Варианты ответов (выберите все правильные)</h3>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="check-a"
+                              type="checkbox"
+                              checked={newLesson.selected_answers?.A || false}
+                              onChange={(e) => setNewLesson({
+                                ...newLesson, 
+                                selected_answers: {
+                                  ...newLesson.selected_answers,
+                                  A: e.target.checked
+                                }
+                              })}
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 flex-grow">
+                            <input
+                              type="text"
+                              value={newLesson.answer_a || ""}
+                              onChange={(e) => setNewLesson({...newLesson, answer_a: e.target.value})}
+                              placeholder="Вариант A"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="check-b"
+                              type="checkbox"
+                              checked={newLesson.selected_answers?.B || false}
+                              onChange={(e) => setNewLesson({
+                                ...newLesson, 
+                                selected_answers: {
+                                  ...newLesson.selected_answers,
+                                  B: e.target.checked
+                                }
+                              })}
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 flex-grow">
+                            <input
+                              type="text"
+                              value={newLesson.answer_b || ""}
+                              onChange={(e) => setNewLesson({...newLesson, answer_b: e.target.value})}
+                              placeholder="Вариант B"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="check-c"
+                              type="checkbox"
+                              checked={newLesson.selected_answers?.C || false}
+                              onChange={(e) => setNewLesson({
+                                ...newLesson, 
+                                selected_answers: {
+                                  ...newLesson.selected_answers,
+                                  C: e.target.checked
+                                }
+                              })}
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 flex-grow">
+                            <input
+                              type="text"
+                              value={newLesson.answer_c || ""}
+                              onChange={(e) => setNewLesson({...newLesson, answer_c: e.target.value})}
+                              placeholder="Вариант C"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="check-d"
+                              type="checkbox"
+                              checked={newLesson.selected_answers?.D || false}
+                              onChange={(e) => setNewLesson({
+                                ...newLesson, 
+                                selected_answers: {
+                                  ...newLesson.selected_answers,
+                                  D: e.target.checked
+                                }
+                              })}
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 flex-grow">
+                            <input
+                              type="text"
+                              value={newLesson.answer_d || ""}
+                              onChange={(e) => setNewLesson({...newLesson, answer_d: e.target.value})}
+                              placeholder="Вариант D"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Matching answers */}
+                  {newLesson.answer_type === "matching" && (
+                    <div className="space-y-4">
+                      <h3 className="font-medium text-gray-900">Сопоставление элементов</h3>
+                      
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-1">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Вопросы</h4>
+                          
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="text"
+                                value={newLesson.question_1 || ""}
+                                onChange={(e) => setNewLesson({...newLesson, question_1: e.target.value})}
+                                placeholder="Вопрос 1"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="text"
+                                value={newLesson.question_2 || ""}
+                                onChange={(e) => setNewLesson({...newLesson, question_2: e.target.value})}
+                                placeholder="Вопрос 2"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="text"
+                                value={newLesson.question_3 || ""}
+                                onChange={(e) => setNewLesson({...newLesson, question_3: e.target.value})}
+                                placeholder="Вопрос 3"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="text"
+                                value={newLesson.question_4 || ""}
+                                onChange={(e) => setNewLesson({...newLesson, question_4: e.target.value})}
+                                placeholder="Вопрос 4"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="col-span-1 flex items-center justify-center">
+                          <div className="flex flex-col space-y-3">
+                            <select
+                              value={newLesson.match_1 || ""}
+                              onChange={(e) => setNewLesson({...newLesson, match_1: e.target.value})}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            >
+                              <option value="">Выберите ответ</option>
+                              <option value="A">Ответ A</option>
+                              <option value="B">Ответ B</option>
+                              <option value="C">Ответ C</option>
+                              <option value="D">Ответ D</option>
+                            </select>
+                            <select
+                              value={newLesson.match_2 || ""}
+                              onChange={(e) => setNewLesson({...newLesson, match_2: e.target.value})}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            >
+                              <option value="">Выберите ответ</option>
+                              <option value="A">Ответ A</option>
+                              <option value="B">Ответ B</option>
+                              <option value="C">Ответ C</option>
+                              <option value="D">Ответ D</option>
+                            </select>
+                            <select
+                              value={newLesson.match_3 || ""}
+                              onChange={(e) => setNewLesson({...newLesson, match_3: e.target.value})}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            >
+                              <option value="">Выберите ответ</option>
+                              <option value="A">Ответ A</option>
+                              <option value="B">Ответ B</option>
+                              <option value="C">Ответ C</option>
+                              <option value="D">Ответ D</option>
+                            </select>
+                            <select
+                              value={newLesson.match_4 || ""}
+                              onChange={(e) => setNewLesson({...newLesson, match_4: e.target.value})}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              required
+                            >
+                              <option value="">Выберите ответ</option>
+                              <option value="A">Ответ A</option>
+                              <option value="B">Ответ B</option>
+                              <option value="C">Ответ C</option>
+                              <option value="D">Ответ D</option>
+                            </select>
+                          </div>
+                        </div>
+                        
+                        <div className="col-span-1">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Ответы</h4>
+                          
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <span className="text-red-500 font-bold mr-2 w-8">A</span>
+                              <input
+                                type="text"
+                                value={newLesson.answer_a || ""}
+                                onChange={(e) => setNewLesson({...newLesson, answer_a: e.target.value})}
+                                placeholder="Выбирает все элементы"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-red-500 font-bold mr-2 w-8">B</span>
+                              <input
+                                type="text"
+                                value={newLesson.answer_b || ""}
+                                onChange={(e) => setNewLesson({...newLesson, answer_b: e.target.value})}
+                                placeholder="Выбирает элемент по ID"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-red-500 font-bold mr-2 w-8">C</span>
+                              <input
+                                type="text"
+                                value={newLesson.answer_c || ""}
+                                onChange={(e) => setNewLesson({...newLesson, answer_c: e.target.value})}
+                                placeholder="Выбирает элемент по имени"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-red-500 font-bold mr-2 w-8">D</span>
+                              <input
+                                type="text"
+                                value={newLesson.answer_d || ""}
+                                onChange={(e) => setNewLesson({...newLesson, answer_d: e.target.value})}
+                                placeholder="Выбирает элемент по классу"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </div>
+              <div className="flex justify-end pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsLessonModalOpen(false)}
+                  className="mr-3 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Сохранить
+                </button>
               </div>
             </form>
           </div>

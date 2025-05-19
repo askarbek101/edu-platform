@@ -9,11 +9,9 @@ export interface Lesson {
   content?: string;
   image?: string;
   video?: string;
-  right_answer?: string;
-  answer_a?: string;
-  answer_b?: string;
-  answer_c?: string;
-  answer_d?: string;
+  answer_type: 'single' | 'multiple' | 'matching';
+  answers?: string; // JSON string for answers data
+  right_answer?: string; // JSON string for correct answers
   created_at?: Date;
 }
 
@@ -27,8 +25,7 @@ export async function GET(
   const assignmentIdIndex = pathParts.findIndex(segment => segment === 'assignments') + 1;
   const assignmentId = parseInt(pathParts[assignmentIdIndex]);
 
-  // TODO: Implement lessonsDb.getByAssignmentId(assignmentId) in your database layer
-   const lessons = await lessonsDb.getByAssignmentId(assignmentId);
+  const lessons = await lessonsDb.getByAssignmentId(assignmentId);
 
   if (!lessons) {
     return NextResponse.json(
@@ -70,10 +67,8 @@ export async function POST(
       body.content,
       body.image,
       body.video,
-      body.answer_a,
-      body.answer_b,
-      body.answer_c,
-      body.answer_d,
+      body.answer_type,
+      body.answers,
       body.right_answer
     );
 
@@ -111,10 +106,8 @@ export async function PUT(
       content: body.content,
       image: body.image,
       video: body.video,
-      answerA: body.answer_a,
-      answerB: body.answer_b,
-      answerC: body.answer_c,
-      answerD: body.answer_d,
+      answerType: body.answer_type,
+      answers: body.answers,
       rightAnswer: body.right_answer
     });
 

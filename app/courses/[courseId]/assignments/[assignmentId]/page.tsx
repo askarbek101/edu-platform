@@ -14,12 +14,10 @@ interface Lesson {
   content?: string;
   image?: string;
   video?: string;
-  right_answer?: string;
+  answer_type: "single" | "multiple" | "matching";
+  answers: string;
+  right_answer: string;
   created_at?: Date;
-  answer_a?: string;
-  answer_b?: string;
-  answer_c?: string;
-  answer_d?: string;
 }
 
 interface Assignment {
@@ -39,7 +37,16 @@ export default function AssignmentPage() {
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // For single choice questions
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  
+  // For multiple choice questions
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  
+  // For matching questions
+  const [matchingAnswers, setMatchingAnswers] = useState<Record<string, string>>({});
+  
   const [answerChecked, setAnswerChecked] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
 
@@ -78,11 +85,13 @@ export default function AssignmentPage() {
   // Reset quiz state when moving to a new lesson
   useEffect(() => {
     setSelectedOption(null);
+    setSelectedOptions([]);
+    setMatchingAnswers({});
     setAnswerChecked(false);
     setIsCorrect(false);
   }, [currentLessonIndex]);
 
-  // Handle option selection
+  // Handle option selection for single choice questions
   const handleOptionSelect = (option: string) => {
     setSelectedOption(option);
     // Reset answer check when a new option is selected
@@ -92,12 +101,88 @@ export default function AssignmentPage() {
     }
   };
 
+  // Handle option selection for multiple choice questions
+  const handleMultipleOptionSelect = (option: string) => {
+    setSelectedOptions(prev => {
+      if (prev.includes(option)) {
+        return prev.filter(item => item !== option);
+      } else {
+        return [...prev, option];
+      }
+    });
+    
+    // Reset answer check when options change
+    if (answerChecked) {
+      setAnswerChecked(false);
+      setIsCorrect(false);
+    }
+  };
+
+  // Handle drag and drop for matching questions
+  const handleMatchingDrop = (questionId: string, answerId: string) => {
+    // Check if this answer is already assigned to another question
+    const existingQuestionId = Object.keys(matchingAnswers).find(
+      qId => matchingAnswers[qId] === answerId
+    );
+    
+    // If it's assigned elsewhere, remove that assignment
+    if (existingQuestionId) {
+      setMatchingAnswers(prev => {
+        const updated = {...prev};
+        delete updated[existingQuestionId];
+        return updated;
+      });
+    }
+    
+    // Assign to the new question
+    setMatchingAnswers(prev => ({
+      ...prev,
+      [questionId]: answerId
+    }));
+    
+    // Reset answer check when matches change
+    if (answerChecked) {
+      setAnswerChecked(false);
+      setIsCorrect(false);
+    }
+  };
+
+  // Handle removing an answer from a question
+  const handleRemoveMatch = (questionId: string) => {
+    setMatchingAnswers(prev => {
+      const updated = {...prev};
+      delete updated[questionId];
+      return updated;
+    });
+    
+    // Reset answer check when matches change
+    if (answerChecked) {
+      setAnswerChecked(false);
+      setIsCorrect(false);
+    }
+  };
+
   // Check if the selected answer is correct
   const checkAnswer = () => {
-    if (!selectedOption) return;
-    
+    const currentLesson = lessons[currentLessonIndex];
     setAnswerChecked(true);
-    setIsCorrect(selectedOption === lessons[currentLessonIndex].right_answer);
+    
+    if (currentLesson.answer_type === "single") {
+      setIsCorrect(selectedOption === currentLesson.right_answer);
+    } 
+    else if (currentLesson.answer_type === "multiple") {
+      const correctAnswers = JSON.parse(currentLesson.right_answer) as string[];
+      const isAllCorrect = correctAnswers.length === selectedOptions.length && 
+        correctAnswers.every(option => selectedOptions.includes(option));
+      setIsCorrect(isAllCorrect);
+    } 
+    else if (currentLesson.answer_type === "matching") {
+      const correctMatches = JSON.parse(currentLesson.right_answer) as Record<string, string>;
+      const isAllMatched = Object.keys(correctMatches).every(
+        questionId => matchingAnswers[questionId] === correctMatches[questionId]
+      );
+      setIsCorrect(isAllMatched);
+    }
   };
 
   // Navigate to next lesson
@@ -161,6 +246,219 @@ export default function AssignmentPage() {
 
   // Get current lesson
   const currentLesson = lessons[currentLessonIndex];
+
+  // Render quiz based on lesson type
+  const renderQuiz = () => {
+    if (!currentLesson) return null;
+    
+    try {
+      const parsedAnswers = JSON.parse(currentLesson.answers);
+      
+      if (currentLesson.answer_type === "single") {
+        return (
+          <div className="mt-8 p-6 bg-gray-50 rounded-lg">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Проверьте свои знания</h3>
+            <div className="space-y-4">
+              {Object.entries(parsedAnswers).map(([key, value]) => (
+                <div key={key} className="flex items-center space-x-3">
+                  <input 
+                    type="radio" 
+                    id={`option-${key}`} 
+                    name="quiz-option" 
+                    className="h-4 w-4 text-primary-600" 
+                    checked={selectedOption === key}
+                    onChange={() => handleOptionSelect(key)}
+                  />
+                  <label htmlFor={`option-${key}`} className="text-gray-700">{value as string}</label>
+                </div>
+              ))}
+              
+              {answerChecked && (
+                <div className={`mt-4 p-3 rounded-md ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {isCorrect 
+                    ? 'Правильно! Отличная работа.' 
+                    : 'Неправильно. Попробуйте еще раз.'}
+                </div>
+              )}
+              
+              <button 
+                className={`mt-4 px-4 py-2 rounded-md ${
+                  !selectedOption 
+                    ? 'bg-gray-300 cursor-not-allowed text-gray-500' 
+                    : 'bg-primary-600 hover:bg-primary-700 text-white'
+                }`}
+                onClick={checkAnswer}
+                disabled={!selectedOption}
+              >
+                Проверить ответ
+              </button>
+            </div>
+          </div>
+        );
+      } 
+      else if (currentLesson.answer_type === "multiple") {
+        return (
+          <div className="mt-8 p-6 bg-gray-50 rounded-lg">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Выберите все правильные ответы</h3>
+            <div className="space-y-4">
+              {Object.entries(parsedAnswers).map(([key, value]) => (
+                <div key={key} className="flex items-center space-x-3">
+                  <input 
+                    type="checkbox" 
+                    id={`option-${key}`} 
+                    className="h-4 w-4 text-primary-600 rounded" 
+                    checked={selectedOptions.includes(key)}
+                    onChange={() => handleMultipleOptionSelect(key)}
+                  />
+                  <label htmlFor={`option-${key}`} className="text-gray-700">{value as string}</label>
+                </div>
+              ))}
+              
+              {answerChecked && (
+                <div className={`mt-4 p-3 rounded-md ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {isCorrect 
+                    ? 'Правильно! Отличная работа.' 
+                    : 'Неправильно. Попробуйте еще раз.'}
+                </div>
+              )}
+              
+              <button 
+                className={`mt-4 px-4 py-2 rounded-md ${
+                  selectedOptions.length === 0
+                    ? 'bg-gray-300 cursor-not-allowed text-gray-500' 
+                    : 'bg-primary-600 hover:bg-primary-700 text-white'
+                }`}
+                onClick={checkAnswer}
+                disabled={selectedOptions.length === 0}
+              >
+                Проверить ответ
+              </button>
+            </div>
+          </div>
+        );
+      } 
+      else if (currentLesson.answer_type === "matching") {
+        // Separate questions and answers
+        const questions: Record<string, string> = {};
+        const answers: Record<string, string> = {};
+        
+        Object.entries(parsedAnswers).forEach(([key, value]) => {
+          // Numeric keys are questions, alphabetic keys are answers
+          if (/^\d+$/.test(key)) {
+            questions[key] = value as string;
+          } else {
+            answers[key] = value as string;
+          }
+        });
+        
+        // Get list of answers that are not currently matched
+        const usedAnswerIds = Object.values(matchingAnswers);
+        const availableAnswers = Object.entries(answers).filter(
+          ([answerId]) => !usedAnswerIds.includes(answerId)
+        );
+        
+        return (
+          <div className="mt-8 p-6 bg-gray-50 rounded-lg">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Сопоставьте элементы</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Questions column with drop zones */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-800">Вопросы</h4>
+                {Object.entries(questions).map(([questionId, questionText]) => (
+                  <div 
+                    key={questionId}
+                    className="p-3 bg-white border border-gray-300 rounded-md flex justify-between items-center"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const answerId = e.dataTransfer.getData("answerId");
+                      handleMatchingDrop(questionId, answerId);
+                    }}
+                  >
+                    <span className="font-medium">{questionText}</span>
+                    {matchingAnswers[questionId] ? (
+                      <div 
+                        className="ml-4 p-2 bg-primary-50 border border-primary-200 rounded-md min-w-[150px] text-center cursor-move flex items-center justify-between"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("answerId", matchingAnswers[questionId]);
+                        }}
+                      >
+                        <span>{answers[matchingAnswers[questionId]]}</span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveMatch(questionId);
+                          }}
+                          className="ml-2 w-5 h-5 flex items-center justify-center rounded-full bg-red-100 hover:bg-red-200 text-red-600"
+                          title="Удалить"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="ml-4 p-2 bg-gray-100 border border-dashed border-gray-400 rounded-md min-w-[150px] text-center text-gray-500">
+                        Перетащите ответ сюда
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Answers column */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-800">Ответы</h4>
+                <div className="grid grid-cols-1 gap-2">
+                  {availableAnswers.map(([answerId, answerText]) => (
+                    <div
+                      key={answerId}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("answerId", answerId);
+                      }}
+                      className="p-3 bg-primary-50 border border-primary-200 rounded-md cursor-move hover:bg-primary-100"
+                    >
+                      {answerText}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            {answerChecked && (
+              <div className={`mt-4 p-3 rounded-md ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {isCorrect 
+                  ? 'Правильно! Отличная работа.' 
+                  : 'Неправильно. Попробуйте еще раз.'}
+              </div>
+            )}
+            
+            <button 
+              className={`mt-4 px-4 py-2 rounded-md ${
+                Object.keys(matchingAnswers).length < Object.keys(questions).length
+                  ? 'bg-gray-300 cursor-not-allowed text-gray-500' 
+                  : 'bg-primary-600 hover:bg-primary-700 text-white'
+              }`}
+              onClick={checkAnswer}
+              disabled={Object.keys(matchingAnswers).length < Object.keys(questions).length}
+            >
+              Проверить ответ
+            </button>
+          </div>
+        );
+      }
+    } catch (err) {
+      console.error("Error parsing answers:", err);
+      return (
+        <div className="mt-8 p-6 bg-red-50 rounded-lg">
+          <p className="text-red-600">Ошибка при загрузке вопроса. Пожалуйста, сообщите администратору.</p>
+        </div>
+      );
+    }
+    
+    return null;
+  };
 
   return (
     <LayoutWithHeader>
@@ -274,78 +572,8 @@ export default function AssignmentPage() {
                   </div>
                 )}
 
-                {/* Quiz/Test Section (if this lesson has a right_answer) */}
-                {currentLesson.right_answer && (
-                  <div className="mt-8 p-6 bg-gray-50 rounded-lg">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-4">Проверьте свои знания</h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-3">
-                        <input 
-                          type="radio" 
-                          id="option-a" 
-                          name="quiz-option" 
-                          className="h-4 w-4 text-primary-600" 
-                          checked={selectedOption === "A"}
-                          onChange={() => handleOptionSelect("A")}
-                        />
-                        <label htmlFor="option-a" className="text-gray-700">{currentLesson.answer_a || "Вариант A"}</label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <input 
-                          type="radio" 
-                          id="option-b" 
-                          name="quiz-option" 
-                          className="h-4 w-4 text-primary-600" 
-                          checked={selectedOption === "B"}
-                          onChange={() => handleOptionSelect("B")}
-                        />
-                        <label htmlFor="option-b" className="text-gray-700">{currentLesson.answer_b || "Вариант B"}</label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <input 
-                          type="radio" 
-                          id="option-c" 
-                          name="quiz-option" 
-                          className="h-4 w-4 text-primary-600" 
-                          checked={selectedOption === "C"}
-                          onChange={() => handleOptionSelect("C")}
-                        />
-                        <label htmlFor="option-c" className="text-gray-700">{currentLesson.answer_c || "Вариант C"}</label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <input 
-                          type="radio" 
-                          id="option-d" 
-                          name="quiz-option" 
-                          className="h-4 w-4 text-primary-600" 
-                          checked={selectedOption === "D"}
-                          onChange={() => handleOptionSelect("D")}
-                        />
-                        <label htmlFor="option-d" className="text-gray-700">{currentLesson.answer_d || "Вариант D"}</label>
-                      </div>
-                      
-                      {answerChecked && (
-                        <div className={`mt-4 p-3 rounded-md ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                          {isCorrect 
-                            ? 'Правильно! Отличная работа.' 
-                            : 'Неправильно. Попробуйте еще раз.'}
-                        </div>
-                      )}
-                      
-                      <button 
-                        className={`mt-4 px-4 py-2 rounded-md ${
-                          !selectedOption 
-                            ? 'bg-gray-300 cursor-not-allowed text-gray-500' 
-                            : 'bg-primary-600 hover:bg-primary-700 text-white'
-                        }`}
-                        onClick={checkAnswer}
-                        disabled={!selectedOption}
-                      >
-                        Проверить ответ
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Quiz/Test Section based on lesson type */}
+                {renderQuiz()}
               </div>
 
               {/* Lesson Navigation (Bottom) */}
